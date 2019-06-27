@@ -1,0 +1,91 @@
+#!/usr/bin/env python
+from argparse import ArgumentParser
+import csv
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+ERROR_LABELS = ['NO_RESULT', 'TIMEOUT']
+
+
+def _process_fieldnames(fieldnames):
+    accuracy_field_mappings = {}
+    acc_stdev_field_mappings = {}
+
+    for field_name in fieldnames:
+        if field_name == 'scenario':
+            continue
+
+        if '(accuracy)' in field_name:
+            learning_system = field_name.split()[0]
+            accuracy_field_mappings[learning_system] = field_name
+
+        elif '(accuracy stddev)' in field_name:
+            learning_system = field_name.split()[0]
+            acc_stdev_field_mappings[learning_system] = field_name
+
+    return accuracy_field_mappings, acc_stdev_field_mappings
+
+
+def plot_accuracy(csv_file_path):
+    with open(csv_file_path) as csv_input_file:
+        csv_reader = csv.DictReader(csv_input_file)
+
+        accuracy_field_mappings, acc_stdev_field_mappings = \
+            _process_fieldnames(csv_reader.fieldnames)
+        learning_systems = [s for s in accuracy_field_mappings.keys()]
+        scenarios = []
+        acc_data = {}
+        acc_stdev_data =  {}
+
+        for ls in learning_systems:
+            acc_data[ls] = []
+            acc_stdev_data[ls] = []
+
+        for scenario_data in csv_reader:
+            scenarios.append(scenario_data['scenario'])
+            for ls in learning_systems:
+                if scenario_data[accuracy_field_mappings[ls]] in ERROR_LABELS:
+                    acc_data[ls].append(0)
+                else:
+                    acc_data[ls].append(
+                        float(scenario_data[accuracy_field_mappings[ls]]))
+
+                if scenario_data[acc_stdev_field_mappings[ls]] in ERROR_LABELS:
+                    acc_stdev_data[ls].append(0)
+                else:
+                    acc_stdev_data[ls].append(
+                        float(scenario_data[acc_stdev_field_mappings[ls]]))
+
+    # actual plotting
+    bar_width = 1 / (len(learning_systems) + 1)
+    indexes = np.arange(len(scenarios))
+    fig, ax = plt.subplots()
+    ls_bars = []
+
+    for ls_idx in range(len(learning_systems)):
+        ls = learning_systems[ls_idx]
+        bars = ax.bar(
+            indexes-0.5 + ((ls_idx+1)*bar_width),
+            acc_data[ls],
+            bar_width,
+            yerr=acc_stdev_data[ls],
+            label=ls)
+        ls_bars.append(bars)
+
+    ax.set_ylabel('Accuracy')
+    ax.set_xticks(indexes)
+    ax.set_xticklabels(scenarios, rotation=20)
+    ax.legend()
+    fig.tight_layout()
+    plt.show()
+
+
+if __name__ == '__main__':
+    argparser = ArgumentParser()
+    argparser.add_argument('csvfile')
+
+    args = argparser.parse_args()
+    csv_file_path = args.csvfile
+
+    plot_accuracy(csv_file_path)
